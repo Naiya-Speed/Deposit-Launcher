@@ -326,6 +326,36 @@
       background: var(--surface); font-size: 12px; color: var(--text2);
       font-family: var(--mono);
     }
+
+    .proxy-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-family: var(--font); color: var(--text2);
+      background: none; border: 0.5px solid var(--border);
+      border-radius: var(--radius-sm); padding: 4px 10px; cursor: pointer;
+      transition: color .12s, border-color .12s, background .12s;
+      white-space: nowrap;
+    }
+    .proxy-btn:hover { color: var(--text); border-color: var(--border2); }
+    .proxy-btn-start { color: var(--danger); border-color: var(--danger); }
+    .proxy-btn-start:hover { background: var(--red-bg); }
+    .modal-step {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 10px 0; border-top: 0.5px solid var(--border);
+      font-size: 13px; color: var(--text); line-height: 1.6;
+    }
+    .modal-step-num {
+      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+      background: var(--green-bg); color: var(--green-t);
+      border: 0.5px solid var(--green-b);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 500; margin-top: 1px;
+    }
+    .modal-code {
+      font-family: var(--mono); font-size: 11px;
+      background: var(--surface2); padding: 2px 7px;
+      border-radius: 4px; border: 0.5px solid var(--border);
+      color: var(--text2);
+    }
   </style>
 </head>
 <body>
@@ -468,7 +498,47 @@
   <div class="proxy-status" id="proxyStatus">
     <span class="dot" id="proxyDot" style="width:8px;height:8px;"></span>
     <span id="proxyMsg">Checking proxy…</span>
-    <button onclick="checkProxy()" style="font-size:11px;font-family:var(--font);color:var(--text2);background:none;border:0.5px solid var(--border);border-radius:var(--radius-sm);padding:2px 8px;cursor:pointer;margin-left:6px;">Recheck</button>
+    <div style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+      <button onclick="checkProxy()" class="proxy-btn">
+        <i class="ti ti-refresh" style="font-size:12px"></i> Recheck
+      </button>
+      <button onclick="showStartInstructions()" class="proxy-btn proxy-btn-start" id="startProxyBtn" style="display:none;">
+        <i class="ti ti-player-play" style="font-size:12px"></i> How to start proxy
+      </button>
+    </div>
+  </div>
+
+  <!-- Start proxy instructions modal -->
+  <div id="proxyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999;align-items:center;justify-content:center;">
+    <div style="background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--radius);padding:1.5rem;max-width:460px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+        <div style="font-size:14px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:8px;">
+          <i class="ti ti-terminal-2" style="color:var(--green-b)"></i> Start GreenDot Proxy
+        </div>
+        <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:18px;line-height:1;">×</button>
+      </div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:1rem;">
+        The Vercel proxy is not reachable. Check the following:
+      </div>
+      <div class="modal-step">
+        <span class="modal-step-num">1</span>
+        <div>Make sure <code class="modal-code" style="display:inline;">api/greendot-soap.js</code> is deployed to Vercel alongside this HTML.</div>
+      </div>
+      <div class="modal-step">
+        <span class="modal-step-num">2</span>
+        <div>Go to your <strong>Vercel dashboard</strong> → Functions tab → confirm <code class="modal-code" style="display:inline;">/api/greendot-soap</code> is listed and not erroring.</div>
+      </div>
+      <div class="modal-step">
+        <span class="modal-step-num">3</span>
+        <div>Re-deploy if needed, then click <strong>Recheck</strong> below.</div>
+      </div>
+      <div style="margin-top:1.25rem;display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closeModal()" class="proxy-btn">Cancel</button>
+        <button onclick="closeModal();checkProxy();" class="proxy-btn" style="background:var(--green-b);color:#fff;border-color:var(--green-b);">
+          <i class="ti ti-refresh" style="font-size:12px"></i> Recheck now
+        </button>
+      </div>
+    </div>
   </div>
 
   <div class="gd-grid" id="gdGrid"></div>
@@ -856,7 +926,7 @@ updateRunHint();
    ══════════════════════════════════════════════════════════════════════ */
 const GD_ACCOUNT  = { email: "naiya++000228@tryspeed.com", account_id: "acct_mp52s8obgWpe9CPn", password: "Speed@001122" };
 const GD_WALLET   = "https://walletapi.tryspeed.dev";
-const GD_SOAP     = "http://localhost:3131/greendot-soap"; // local proxy → greendotauth.tryspeed.dev
+const GD_SOAP     = "/api/greendot-soap"; // Vercel serverless proxy → greendotauth.tryspeed.dev
 
 const GD_SCRIPTS = [
   { id: "GD_ALL",  name: "Full flow",   icon: "🟢", meta: "Step 1 → 2 → 3",  desc: "Login → Create deposit → GreenDot Auth → AuthCommit", needsBarcode: false },
@@ -1128,24 +1198,38 @@ async function runGreenDot() {
 
 /* ── Proxy health check ── */
 async function checkProxy() {
-  const dot = document.getElementById("proxyDot");
-  const msg = document.getElementById("proxyMsg");
+  const dot     = document.getElementById("proxyDot");
+  const msg     = document.getElementById("proxyMsg");
+  const startBtn= document.getElementById("startProxyBtn");
   dot.className = "dot run";
-  msg.textContent = "Checking proxy at localhost:3131…";
+  msg.textContent = "Checking Vercel proxy…";
   try {
-    const res = await fetch("http://localhost:3131/health", { signal: AbortSignal.timeout(3000) });
+    // For Vercel: do a quick OPTIONS preflight to confirm the API route is live
+    const res = await fetch("/api/greendot-soap", { method: "OPTIONS", signal: AbortSignal.timeout(5000) });
     if (res.ok) {
       dot.className = "dot ok";
-      msg.textContent = "Proxy running — localhost:3131 ✓";
-      document.getElementById("gdRunBtn").style.background = "var(--green-b)";
-    } else {
-      throw new Error("Non-OK response");
-    }
+      msg.textContent = "Vercel proxy active ✓";
+      if (startBtn) startBtn.style.display = "none";
+    } else { throw new Error("Non-OK"); }
   } catch(e) {
     dot.className = "dot err";
-    msg.innerHTML = 'Proxy not running — start it with <code style="font-size:11px;background:var(--surface2);padding:1px 5px;border-radius:4px;border:0.5px solid var(--border);">node proxy.js</code> then click Recheck';
+    msg.textContent = "Vercel proxy not reachable — check deployment";
+    if (startBtn) startBtn.style.display = "inline-flex";
   }
 }
+
+function showStartInstructions() {
+  const modal = document.getElementById('proxyModal');
+  modal.style.display = 'flex';
+}
+function closeModal() {
+  document.getElementById('proxyModal').style.display = 'none';
+}
+// close on backdrop click
+document.getElementById('proxyModal')?.addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
 
 renderGdCards();
 checkProxy();
