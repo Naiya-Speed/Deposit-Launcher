@@ -64,4 +64,6 @@ module.exports = function handler(req, res) {
     proxyReq.write(body);
     proxyReq.end();
   });
-}
+};
+
+module.exports.config = { api: { bodyParser: false } };
