@@ -546,14 +546,43 @@
   <div class="section-label" style="margin-top:1.25rem;">Configure GreenDot run</div>
   <div class="config-panel" id="gdPanel">
 
-    <!-- Account row -->
-    <div class="acc-default-row" style="margin-bottom:12px;">
-      <div class="acc-badge" style="background:var(--green-bg);border-color:var(--green-b);color:var(--green-t);">
-        <i class="ti ti-leaf" aria-hidden="true"></i>
+    <!-- Default account -->
+    <div id="gdDefaultAccBlock" style="margin-bottom:12px;">
+      <div class="acc-default-row">
+        <div class="acc-badge" style="background:var(--green-bg);border-color:var(--green-b);color:var(--green-t);">
+          <i class="ti ti-leaf" aria-hidden="true"></i>
+        </div>
+        <div class="acc-info">
+          <div class="acc-email">naiya++000228@tryspeed.com</div>
+          <div class="acc-ids">acct_mp52s8obgWpe9CPn</div>
+        </div>
+        <button class="toggle-custom-btn" id="gdToggleCustomBtn" onclick="gdToggleCustom()" aria-expanded="false">
+          <i class="ti ti-pencil" style="font-size:13px" aria-hidden="true"></i> Use different account
+        </button>
       </div>
-      <div class="acc-info">
-        <div class="acc-email">naiya++000228@tryspeed.com</div>
-        <div class="acc-ids">acct_mp52s8obgWpe9CPn</div>
+    </div>
+
+    <!-- Custom account fields -->
+    <div id="gdCustomAccBlock" style="display:none; margin-bottom:12px;">
+      <div class="custom-acc-header">
+        <span style="font-size:12px;color:var(--text2);font-weight:500;">Custom account</span>
+        <button class="toggle-custom-btn" onclick="gdToggleCustom()" style="color:var(--danger)">
+          <i class="ti ti-x" style="font-size:12px" aria-hidden="true"></i> Cancel
+        </button>
+      </div>
+      <div class="form-row" style="margin-top:8px;">
+        <div class="form-group">
+          <label><i class="ti ti-at" aria-hidden="true"></i> Email</label>
+          <input type="text" id="gdCustomEmail" placeholder="user@tryspeed.com" spellcheck="false" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label><i class="ti ti-lock" aria-hidden="true"></i> Password</label>
+          <input type="password" id="gdCustomPassword" placeholder="••••••••" autocomplete="off" />
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:8px;">
+        <label><i class="ti ti-id" aria-hidden="true"></i> Account ID</label>
+        <input type="text" id="gdCustomAccountId" placeholder="acct_xxxxxxxxxxxxxxxx" spellcheck="false" autocomplete="off" />
       </div>
     </div>
 
@@ -935,6 +964,23 @@ const GD_SCRIPTS = [
 ];
 
 let gdSelected = null;
+let gdUseCustom = false;
+
+function gdToggleCustom() {
+  gdUseCustom = !gdUseCustom;
+  document.getElementById("gdCustomAccBlock").style.display  = gdUseCustom ? "block" : "none";
+  document.getElementById("gdDefaultAccBlock").style.display = gdUseCustom ? "none"  : "block";
+  document.getElementById("gdToggleCustomBtn").setAttribute("aria-expanded", gdUseCustom);
+}
+
+function gdGetAccount() {
+  if (!gdUseCustom) return GD_ACCOUNT;
+  return {
+    email:      document.getElementById("gdCustomEmail").value.trim(),
+    password:   document.getElementById("gdCustomPassword").value,
+    account_id: document.getElementById("gdCustomAccountId").value.trim(),
+  };
+}
 
 function renderGdCards() {
   const grid = document.getElementById("gdGrid");
@@ -1133,9 +1179,11 @@ async function runGreenDot() {
   const amount = parseFloat(document.getElementById("gdAmount").value);
   const barcodeInput = document.getElementById("gdBarcode").value.trim();
 
+  const account = gdGetAccount();
+
   document.getElementById("gdRunBtn").disabled = true;
   gdSetStatus("run", `Running ${s.name}…`);
-  gdLog(`━━━ ${s.name}  ·  $${amount} USD ━━━`, "li");
+  gdLog(`━━━ ${s.name}  ·  $${amount} USD  ·  ${account.email} ━━━`, "li");
 
   let barcode = barcodeInput;
   let idToken, accessToken;
@@ -1147,7 +1195,7 @@ async function runGreenDot() {
       const authRes = await fetch(GD_WALLET + "/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: GD_ACCOUNT.email, password: GD_ACCOUNT.password })
+        body: JSON.stringify({ email: account.email, password: account.password })
       });
       if (!authRes.ok) { const t = await authRes.text(); gdLog(`✗ Login failed ${authRes.status}: ${t.slice(0,200)}`, "le"); throw new Error("Login failed"); }
       const authData = await authRes.json();
@@ -1159,7 +1207,7 @@ async function runGreenDot() {
       const depRes = await fetch(GD_WALLET + "/deposit", {
         method: "POST",
         headers: {
-          "speed-account": GD_ACCOUNT.account_id, "speed-livemode":"true",
+          "speed-account": account.account_id, "speed-livemode":"true",
           "speed-account-type":"wallet", "Authorization": idToken,
           "Access": accessToken, "Content-Type":"application/json"
         },
@@ -1182,7 +1230,7 @@ async function runGreenDot() {
     if (!step2.confirmId) { gdLog("✗ No ConfirmationID — cannot proceed to Step 3", "le"); throw new Error("No ConfirmationID"); }
 
     /* ── Step 3: GreenDot AuthCommit (SOAP) ── */
-    await callSoap("Step 3 — GreenDot AuthCommit", buildAuthCommitSoap(step2.confirmId, amount, GD_ACCOUNT.account_id));
+    await callSoap("Step 3 — GreenDot AuthCommit", buildAuthCommitSoap(step2.confirmId, amount, account.account_id));
 
     gdLog("━━━ All steps completed ━━━", "ls");
     gdSetStatus("ok", `${s.name} — done`);
