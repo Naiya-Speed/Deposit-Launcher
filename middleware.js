@@ -1,18 +1,21 @@
-import { NextResponse } from "next/server";
-
-export function middleware(req) {
+export default function middleware(request) {
   const user = process.env.ADMIN_USER;
   const pass = process.env.ADMIN_PASS;
 
-  const auth = req.headers.get("authorization") || "";
+  const auth = request.headers.get("authorization") || "";
   const [scheme, encoded] = auth.split(" ");
 
   if (scheme === "Basic" && encoded) {
-    const [u, p] = atob(encoded).split(":");
-    if (u === user && p === pass) return NextResponse.next();
+    try {
+      const decoded = atob(encoded);
+      const colon = decoded.indexOf(":");
+      const u = decoded.slice(0, colon);
+      const p = decoded.slice(colon + 1);
+      if (u === user && p === pass) return; // pass through
+    } catch {}
   }
 
-  return new NextResponse("Unauthorized", {
+  return new Response("Unauthorized", {
     status: 401,
     headers: { "WWW-Authenticate": 'Basic realm="Deposit Launcher"' },
   });
